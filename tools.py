@@ -82,6 +82,7 @@ def get_schema(conn: sqlite3.Connection, table_name: str | None = None) -> str:
     if table_name:
         cursor.execute(f"PRAGMA table_info({table_name});")
         columns = cursor.fetchall()
+        # (cid, name, type, notnull, default_value, pk)
         return str([(col[1], col[2]) for col in columns])
     else:
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
@@ -89,13 +90,13 @@ def get_schema(conn: sqlite3.Connection, table_name: str | None = None) -> str:
         return str([table[0] for table in tables])
 
 
-def save_data_to_csv(data: list[tuple], filename: str = "", query_description: str = "") -> str:
+def save_data_to_csv(data: list[tuple] | str, filename: str = "", query_description: str = "") -> str:
     """
     Saves tabular data to a specific CSV file when the user explicitly requests it.
     This creates individual CSV files per user request.
     
     Args:
-        data: A list of tuples or lists containing the data rows to save.
+        data: A list of tuples or lists containing the data rows to save, or a string representation.
         filename: The name of the CSV file to create. If empty, uses a timestamped name.
         query_description: Optional description to add as a header in the file.
     
@@ -105,6 +106,13 @@ def save_data_to_csv(data: list[tuple], filename: str = "", query_description: s
     print(f"   [Tool Action] Creating individual CSV file: {filename or 'auto-named'}...")
     
     try:
+        # Handle string input by attempting to parse it
+        if isinstance(data, str):
+            try:
+                data = ast.literal_eval(data)
+            except:
+                return "Error: Provided data string could not be parsed into a list."
+        
         # Validate input data
         if not data:
             return "Error: No data provided. The data list is empty."
@@ -112,22 +120,22 @@ def save_data_to_csv(data: list[tuple], filename: str = "", query_description: s
         if not isinstance(data, list):
             return f"Error: Data must be a list, received {type(data).__name__}."
         
+        # Normalize to tabular format
+        rows = [list(row) if isinstance(row, (list, tuple)) else [row] for row in data]
+        
         # Generate filename if not provided
         if not filename:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"query_{timestamp}.csv"
         
         # Ensure filename has .csv extension
-        if not filename.endswith('.csv'):
-            filename += '.csv'
+        if not filename.lower().endswith(".csv"):
+            filename += ".csv"
         
-        # Get the absolute path
-        abs_path = os.path.abspath(filename)
-        
-        # Create directory if it doesn't exist
-        directory = os.path.dirname(abs_path)
-        if directory and not os.path.exists(directory):
-            os.makedirs(directory)
+        base_dir = os.path.join(os.getcwd(), "files")
+        os.makedirs(base_dir, exist_ok=True)
+        file_path = os.path.join(base_dir, filename)
+        abs_path = os.path.abspath(file_path)
         
         # Write data to CSV file (OVERWRITE mode for individual files)
         with open(abs_path, 'w', newline='', encoding='utf-8') as csvfile:
@@ -141,7 +149,7 @@ def save_data_to_csv(data: list[tuple], filename: str = "", query_description: s
                 writer.writerow([])  # Empty line
             
             # Write the actual data
-            writer.writerows(data)
+            writer.writerows(rows)
         
         return f"Success: Data saved to individual file {abs_path}"
     

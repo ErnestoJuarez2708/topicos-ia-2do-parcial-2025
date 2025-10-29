@@ -92,7 +92,7 @@ def get_async_query_result(
 ) -> AgentAsyncStartResponse | AgentAsyncFinishResponse:
     result = execute_sql(db_conn, f"SELECT * FROM queries WHERE id = '{query_id}'")
     rows = ast.literal_eval(result)
-    if not rows:
+    if not rows or not rows[0][2]:
         return AgentAsyncStartResponse(
             query_id=query_id,
             status="pending",
